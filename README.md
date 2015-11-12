@@ -1,2 +1,2 @@
-# VpriskDevelpment
+# VpriskDevelopment
 A repository for Vprisk developers
