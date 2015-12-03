@@ -1,0 +1,44 @@
+一：RDD是什么?
+英文名为resilient distributed dataset
+翻译为弹性分布式数据集
+指的是一个只读的，可分区的分布式数据集，这个数据集的全部或部分可以缓存在内存中，在多次计算间重用。
+RDDs是容错的，他的并行数据结构允许用户显式地在内存中保存中间结果，控制最优的数据存放分区，并且通过丰富的运算符操作它。
+粗粒度的，通过记录转换日志建立一个数据集（血统）来有效的容错。
+RDD是Spark的核心，也是整个Spark的架构基础。
+二：为什么有RDD?
+当前计算框架为集群计算资源提供数目众多的抽象，但是他们缺乏对分布式内存的抽象。因此他们对于某些场景就不适合：比如并行计算当中需要立马复用结果集的。在迭代计算，机器学习，图计算场景当中数据复用也是非常普遍的,包括包括网页排名，K-均值聚类和回归。另一个例子就是交互式的数据挖掘，即一个用户在共同的子集上运行多个查询。在当前多数框架当中，当前在两个计算当中唯一的重用数据的方式(比如MapReduce jobs)是去写额外的磁盘，例如分布式文件系统。这样的数据复制会导致大量的额外的开销，比如磁盘I/O、序列化，这样会占据程序的大量时间。
+三：RDD怎么用?
+1.获取RDDa.
+a.从共享的文件系统获取，如：HDFS
+b.通过已存在的RDD转换
+c.将已存在scala集合（只要是Seq对象）并行化 ，通过调用SparkContext的parallelize方法实现
+d.改变现有RDD的持久性
+2.操作RDD 
+a.Transformation：根据数据集创建一个新的数据集，计算后返回一个新RDD；例如：Map将数据的每个元素经过某个函数计算后，返回一个新的分布式数据集。具体操作如下
+  
+map(func)
+  	返回一个新的分布式数据集，由每个原元素经过func函数转换后组成
+filter(func)	返回一个新的数据集，由经过func函数后返回值为true的原元素组成
+flatMap(func)	类似于map，但是每一个输入元素，会被映射为0到多个输出元素（因此，func函数的返回值是一个Seq，而不是单一元素）
+flatMap(func)	类似于map，但是每一个输入元素，会被映射为0到多个输出元素（因此，func函数的返回值是一个Seq，而不是单一元素）
+sample(withReplacement,  frac, seed)	根据给定的随机种子seed，随机抽样出数量为frac的数据
+union(otherDataset)	返回一个新的数据集，由原数据集和参数联合而成
+groupByKey([numTasks])	在一个由（K,V）对组成的数据集上调用，返回一个（K，Seq[V])对的数据集。注意：默认情况下，使用8个并行任务进行分组，你可以传入numTask可选参数，根据数据量设置不同数目的Task
+reduceByKey(func,  [numTasks])	在一个（K，V)对的数据集上使用，返回一个（K，V）对的数据集，key相同的值，都被使用指定的reduce函数聚合到一起。和groupbykey类似，任务的个数是可以通过第二个可选参数来配置的。
+join(otherDataset,  [numTasks])	在类型为（K,V)和（K,W)类型的数据集上调用，返回一个（K,(V,W))对，每个key中的所有元素都在一起的数据集
+groupWith(otherDataset,  [numTasks])	在类型为（K,V)和(K,W)类型的数据集上调用，返回一个数据集，组成元素为（K, Seq[V], Seq[W]) Tuples。这个操作在其它框架，称为CoGroup
+cartesian(otherDataset)	
+  笛卡尔积。但在数据集T和U上调用时，返回一个(T，U）对的数据集，所有元素交互进行笛卡尔积。
+flatMap(func)	类似于map，但是每一个输入元素，会被映射为0到多个输出元素（因此，func函数的返回值是一个Seq，而不是单一元素）
+
+b.Actions：对数据集计算后返回一个数值value给驱动程序；例如：Reduce将数据集的所有元素用某个函数聚合后，将最终结果返回给程序。具体操作如下
+
+reduce(func)	通过函数func聚集数据集中的所有元素。Func函数接受2个参数，返回一个值。这个函数必须是关联性的，确保可以被正确的并发执行
+collect()	在Driver的程序中，以数组的形式，返回数据集的所有元素。这通常会在使用filter或者其它操作后，返回一个足够小的数据子集再使用，直接将整个RDD集Collect返回，很可能会让Driver程序OOM
+count()	返回数据集的元素个数
+take(n)	返回一个数组，由数据集的前n个元素组成。注意，这个操作目前并非在多个节点上，并行执行，而是Driver程序所在机器，单机计算所有的元素(Gateway的内存压力会增大，需要谨慎使用）
+first()	返回数据集的第一个元素（类似于take（1）
+saveAsTextFile(path)	将数据集的元素，以textfile的形式，保存到本地文件系统，hdfs或者任何其它hadoop支持的文件系统。Spark将会调用每个元素的toString方法，并将它转换为文件中的一行文本
+saveAsSequenceFile(path)	将数据集的元素，以sequencefile的格式，保存到指定的目录下，本地系统，hdfs或者任何其它hadoop支持的文件系统。RDD的元素必须由key-value对组成，并都实现了Hadoop的Writable接口，或隐式可以转换为Writable（Spark包括了基本类型的转换，例如Int，Double，String等等）
+foreach(func)	在数据集的每一个元素上，运行函数func。这通常用于更新一个累加器变量，或者和外部存储系统做交互
+
